@@ -58,7 +58,7 @@ def get_esm_embeddings(pep_tuple_list, esm_model, alphabet, batch_converter, dev
         embedding = token_representations[i, 1: tokens_len - 1]
         # Generate per-sequence representations via averaging
         if sequence_embedding:
-            pass  # TODO: fill this line
+            embedding = embedding.mean(0)  # Average over all amino acid embeddings to get a single vector per sequence
         representations.append(embedding.cpu().numpy())
 
     return representations
