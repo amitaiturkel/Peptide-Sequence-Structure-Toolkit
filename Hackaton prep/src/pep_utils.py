@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from scipy.spatial.distance import cdist, pdist
+import os
 
 
 def load_peptide_data(data_csv="DB/NesDB_all_CRM1_with_peptides_train.csv", include_nesdoubt=True, include_nodoubt=True,
@@ -14,7 +15,24 @@ def load_peptide_data(data_csv="DB/NesDB_all_CRM1_with_peptides_train.csv", incl
     :param max_peptide_len: Maximal allowed length for a peptide (default=22)
     :return: Three lists: [positive peptides], [negative peptides], [is doubt labels]
     """
-    df = pd.read_csv(data_csv).dropna(subset=['Peptide_sequence', 'Negative_sequence', 'Sequence'])
+    #print current path
+
+    print("📂 Current path:", os.getcwd())
+    base_path = os.getcwd()
+    subdirs = ["Hackaton prep", "src"]
+
+    # Dynamically append only existing folders
+    for folder in subdirs:
+        next_path = os.path.join(base_path, folder)
+        if os.path.isdir(next_path):
+            base_path = next_path
+        else:
+            print(f"❌ Skipping missing folder: {folder}")
+
+    # Final file path
+    full_file_path = os.path.join(base_path, data_csv)
+
+    df = pd.read_csv(full_file_path).dropna(subset=['Peptide_sequence', 'Negative_sequence', 'Sequence'])
     if not include_nesdoubt:
         df = df[df['is_NesDB_doubt'] != True].reset_index(drop=True)
     if not include_nodoubt:
@@ -68,6 +86,11 @@ def get_peptide_distances(pos_neg_test_peptides, pos_train_peptides, reduce_func
     :return: numpy array with distance for eact peptide in 'pos_neg_test_peptides'
     """
     # Get all of the Euclidean distances of the ESM embeddings for each test-train pair
+    for i, emb in enumerate(pos_neg_test_peptides[:3]):
+        print(f"pos_neg_test_peptides : Embedding {i}:", emb, "Shape:", np.shape(emb))
+    for i, emb in enumerate(pos_train_peptides[:3]):
+        print(f"pos_train_peptides: Embedding {i}:", emb, "Shape:", np.shape(emb))
+
     distances = cdist(np.array(pos_neg_test_peptides), np.array(pos_train_peptides), metric="euclidean")
 
     # For each test peptide get the mean/median/max... etc. from all the positive training peptides
