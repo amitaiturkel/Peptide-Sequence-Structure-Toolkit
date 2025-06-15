@@ -19,7 +19,7 @@ def load_peptide_data(data_csv="DB/NesDB_all_CRM1_with_peptides_train.csv", incl
 
     print("📂 Current path:", os.getcwd())
     base_path = os.getcwd()
-    subdirs = ["Hackaton prep", "src"]
+    subdirs = []
 
     # Dynamically append only existing folders
     for folder in subdirs:

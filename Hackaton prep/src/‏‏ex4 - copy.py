@@ -30,16 +30,15 @@ def simple_score(p_train, n_train, p_test, n_test):
     negative_mean_distances_neg = get_peptide_distances(n_test, n_train, reduce_func=np.mean)
 
     p_score = np.log1p(positive_mean_distances_neg) - np.log1p(positive_mean_distances_pos)
-    n_score = None  # TODO: fill this line
+    n_score = n_score = np.log1p(negative_mean_distances_neg) - np.log1p(negative_mean_distances_pos)
 
     return p_score, n_score
 
 
 if __name__ == '__main__':
 
-    # TODO: play with these parameters
-    chosen_embedding_size = 1280  # ESM embedding dim (320-5120)
-    chosen_embedding_layer = 33  # which transformer layer to take
+    chosen_embedding_size = 640  # ESM embedding dim (320-5120)
+    chosen_embedding_layer = 30  # which transformer layer to take
     chosen_test_size = 0.25  # train/test split
 
     # Load all the peptide data
@@ -97,11 +96,10 @@ if __name__ == '__main__':
 
     # Train a simple neural network
     print("Training a neural network on the training set")
-    # TODO: Select parameters for the network
-    batch_size = 64 # grid search says 32
+    batch_size = 32 # grid search says 32
     epochs = 50 # grid search says 50
-    lr = 1e-3 # grid search says 0.001
-    hidden_dim = 128 # grid search says 64
+    lr = 0.001 # grid search says 0.001
+    hidden_dim = 128 # grid search says 128
     dropout = 0.2 # grid search says 0.2
     # Prepare a Dataloader and create model
     net_dataloader = prepare_loader(positive_train, negative_train, batch_size=batch_size)
