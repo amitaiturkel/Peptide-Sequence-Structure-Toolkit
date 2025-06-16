@@ -21,7 +21,6 @@ def get_esm_model(embedding_size=1280):
     if embedding_size not in ESM_MODELS_DICT:
         raise ValueError(f"ERROR: ESM does not have a trained model with embedding size of {embedding_size}.\n "
                          f"Please use one of the following embedding sized: {ESM_MODELS_DICT.keys()}")
-
     model, alphabet = ESM_MODELS_DICT[embedding_size]()
     batch_converter = alphabet.get_batch_converter()
     model.eval()  # disables dropout for deterministic results
@@ -58,7 +57,7 @@ def get_esm_embeddings(pep_tuple_list, esm_model, alphabet, batch_converter, dev
         embedding = token_representations[i, 1: tokens_len - 1]
         # Generate per-sequence representations via averaging
         if sequence_embedding:
-            embedding = embedding.mean(0)  # Average over all amino acid embeddings to get a single vector per sequence
+            embedding = embedding.mean(0)
         representations.append(embedding.cpu().numpy())
 
     return representations
