@@ -1,5 +1,14 @@
 import torch
-import esm
+# import esm
+import requests
+from bs4 import BeautifulSoup
+import re
+import json
+import csv
+import os
+
+
+from typing import Tuple ,List
 
 """
 Pipeline overview:
@@ -12,14 +21,70 @@ ready for downstream machine learning model training.
 
 # All of ESM-2 pre-trained models by embedding size
 #TODO take the 1280: esm.pretrained.esm2_t33_650M_UR50D,
+#
+# ESM_MODELS_DICT = {320: esm.pretrained.esm2_t6_8M_UR50D,
+#                    480: esm.pretrained.esm2_t12_35M_UR50D,
+#                    640: esm.pretrained.esm2_t30_150M_UR50D,
+#                    1280: esm.pretrained.esm2_t33_650M_UR50D,
+#                    2560: esm.pretrained.esm2_t36_3B_UR50D,
+#                    5120: esm.pretrained.esm2_t48_15B_UR50D}
+#
+#
 
-ESM_MODELS_DICT = {320: esm.pretrained.esm2_t6_8M_UR50D,
-                   480: esm.pretrained.esm2_t12_35M_UR50D,
-                   640: esm.pretrained.esm2_t30_150M_UR50D,
-                   1280: esm.pretrained.esm2_t33_650M_UR50D,
-                   2560: esm.pretrained.esm2_t36_3B_UR50D,
-                   5120: esm.pretrained.esm2_t48_15B_UR50D}
 
+def fetch_nes_list(url="http://prodata.swmed.edu/nes_pattern_location/"):
+    resp = requests.get(url)
+    resp.raise_for_status()
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Find the table containing NES data
+    table = soup.find("table")
+    if not table:
+        raise RuntimeError("No table found on the page")
+
+    nes_entries = []
+
+    # Extract header columns and find indexes of interest
+    headers = [th.get_text(strip=True) for th in table.find_all("th")]
+
+    # Expected headers, find their positions:
+    try:
+        idx_name = headers.index("name")
+        idx_start = headers.index("start#")
+        idx_sequence = headers.index("sequence")
+    except ValueError as e:
+        raise RuntimeError(f"Expected column not found: {e}")
+
+    for tr in table.find_all("tr")[1:]:  # skip header row
+        cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(cols) < max(idx_name, idx_start, idx_sequence) + 1:
+            continue  # incomplete row, skip
+
+        protein = cols[idx_name]
+        start_str = cols[idx_start]
+        sequence = cols[idx_sequence]
+
+        if not start_str.isdigit():
+            continue  # invalid start number
+
+        start = int(start_str)
+        end = start + len(sequence) - 1
+
+        nes_entries.append({
+            "protein": protein,
+            "start": start,
+            "end": end,
+            "sequence": sequence
+        })
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # get the folder where the script is
+    file_path = os.path.join(script_dir, "nes_list.csv")
+    with open(file_path, "w", newline='', encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["protein", "start", "end", "sequence"])
+        writer.writeheader()
+        writer.writerows(nes_entries)
+
+    return nes_entries
 
 def get_esm_model(embedding_size=1280):
     """
@@ -167,10 +232,11 @@ def process_sample(seq: str, pdb_path: str, peptide_chain: str, pocket_chains: L
 
 if __name__ == "__main__":
     # Example usage - adjust peptide sequence and paths to your data
-    example_seq = "ACDEFGHIKLMNPQRSTVWY"
-    example_pdb = "example_structure.pdb"
-    peptide_chain = 'P'  # assumed chain id for peptide
-    pocket_chains = ['A', 'B']  # example chains for CRM1 pocket (adjust to your data)
-    output_csv = "peptide_training_data.csv"
-
-    process_sample(example_seq, example_pdb, peptide_chain, pocket_chains, output_csv)
+    fetch_nes_list()
+    # example_seq = "ACDEFGHIKLMNPQRSTVWY"
+    # example_pdb = "example_structure.pdb"
+    # peptide_chain = 'P'  # assumed chain id for peptide
+    # pocket_chains = ['A', 'B']  # example chains for CRM1 pocket (adjust to your data)
+    # output_csv = "peptide_training_data.csv"
+    #
+    # process_sample(example_seq, example_pdb, peptide_chain, pocket_chains, output_csv)
