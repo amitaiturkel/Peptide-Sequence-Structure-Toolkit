@@ -1,0 +1,2 @@
+embedding_size,esm_layer,n_epochs,batch_size,test_size,hidden_dim,classifier_hidden_dim,use_mlp,lr,use_dropout,dropout_rate,add_weights,precision,recall,f1,support
+640,6,10,8,0.2,128,64,True,0.001,True,0.3,True,0.47101449275362317,0.3939393939393939,0.429042904290429,2159
