@@ -59,7 +59,7 @@ def extract_peptides_and_masks(pdb_dir, crm1_chain_id="A", peptide_chain_id="B",
     return peptide_seqs, binding_masks
 
 if __name__ == '__main__':
-    pdb_folder = "structures/af_positives"
+    pdb_folder = "data/structures/af_positives"
     crm1_chain_id = "A"  # Update if needed
     peptide_chain_id = "B"
 
@@ -71,7 +71,7 @@ if __name__ == '__main__':
         print(mask)
         print("-")
 
-    save_path = "peptide_data.pkl"
+    save_path = "data/peptide_data.pkl"
     with open(save_path, "wb") as f:
         pickle.dump((seqs, masks), f)
 

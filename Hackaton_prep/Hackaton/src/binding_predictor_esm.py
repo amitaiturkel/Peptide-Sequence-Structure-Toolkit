@@ -7,6 +7,10 @@ from typing import List
 import pickle
 import os
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_fscore_support
+import itertools
+import csv
+
 from sklearn.metrics import classification_report
 
 # ---------- Load ESM Model ----------
@@ -113,6 +117,13 @@ def evaluate_model(model, dataloader):
                 all_labels.extend(t[m].cpu().numpy())
     print("Evaluation Report:")
     print(classification_report(all_labels, all_preds, digits=4))
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average="binary")
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "support": len(all_labels)
+    }
 
 # ---------- Save ----------
 def save_model(model, path="residue_classifier.pt"):
@@ -124,7 +135,9 @@ def run_pipeline_from_pickle(data_path="peptide_data.pkl",
                              model_path="residue_classifier.pt",
                              embedding_size=640,
                              esm_layer=6,
-                             test_size=0.2):
+                             test_size=0.2,
+                             n_epochs = 10,
+                             batch_size= 10):
 
     # Load raw data
     print("Loading peptide data...")
@@ -149,13 +162,13 @@ def run_pipeline_from_pickle(data_path="peptide_data.pkl",
 
     train_dataset = PepResidueDataset(train_X, train_y)
     test_dataset = PepResidueDataset(test_X, test_y)
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, collate_fn=pad_collate)
-    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, collate_fn=pad_collate)
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=True, collate_fn=pad_collate)
+    test_loader = DataLoader(test_dataset, batch_size, shuffle=False, collate_fn=pad_collate)
 
     # Train
     model = BindingPredictor(emb_dim=embedding_size)
     print("Training model...")
-    train_model(model, train_loader, n_epochs=10)
+    train_model(model, train_loader, n_epochs)
 
     # Save
     save_model(model, model_path)
@@ -163,4 +176,64 @@ def run_pipeline_from_pickle(data_path="peptide_data.pkl",
 
     # Evaluate
     print("Evaluating on test set...")
-    evaluate_model(model, test_loader)
+    return evaluate_model(model, test_loader)
+def main(data_path="peptide_data.pkl",
+         embedding_path="peptide_embeddings.pkl",
+         model_path="residue_classifier.pt",
+         embedding_size=640,
+         esm_layer=6,
+         test_size=0.2,
+         n_epochs = 10,
+         batch_size =8):
+
+
+    # Run the full training and evaluation pipeline
+    run_pipeline_from_pickle(
+        data_path=data_path,
+        embedding_path=embedding_path,
+        model_path=model_path,
+        embedding_size=embedding_size,
+        esm_layer=esm_layer,
+        test_size=test_size,
+        n_epochs = n_epochs,
+        batch_size =batch_size
+
+    )
+
+def grid_search(param_grid, csv_path="results.csv"):
+    keys = list(param_grid.keys())
+    combinations = list(itertools.product(*[param_grid[k] for k in keys]))
+
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+
+    with open(csv_path, "w", newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=keys + ["precision", "recall", "f1", "support"])
+        writer.writeheader()
+
+        for combo in combinations:
+            params = dict(zip(keys, combo))
+            print(f"\nRunning experiment with: {params}")
+            metrics = run_pipeline_from_pickle(
+                data_path="data/peptide_data.pkl",
+                embedding_path=f"saved_models/emb_{params['embedding_size']}.pkl",
+                model_path=f"saved_models/model_emb{params['embedding_size']}_ep{params['n_epochs']}_bs{params['batch_size']}.pt",
+                embedding_size=params["embedding_size"],
+                esm_layer=params["esm_layer"],
+                test_size=params["test_size"],
+                n_epochs=params["n_epochs"],
+                batch_size=params["batch_size"]
+            )
+            result_row = {**params, **metrics}
+            writer.writerow(result_row)
+            print(f"Logged results: {result_row}")
+
+if __name__ == "__main__":
+    param_grid = {
+        "embedding_size": [640, 1280],
+        "esm_layer": [6,8 ,20],
+        "n_epochs": [ 10,20,50],
+        "batch_size": [8,16],
+        "test_size": [0.2]
+    }
+
+    grid_search(param_grid, csv_path="results/results.csv")
