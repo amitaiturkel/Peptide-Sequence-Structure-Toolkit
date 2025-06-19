@@ -81,28 +81,42 @@ class SequencePredictorApp:
 
     def _predict(self, seq: str):
         """
-        Given an amino-acid sequence, returns a discrete 0/1 prediction
-        for each residue (shape: L,).
+        Discrete prediction (0/1) per residue with adaptive thresholding.
+        Ensures at least 3 residues are predicted as binding.
         """
-        # 1) Compute ESM embeddings for this one sequence
+        # 1) Get ESM embedding
         emb_list = get_esm_embeddings(
             [seq],
             self.esm_model,
             self.alphabet,
             self.batch_converter,
             self.device,
-            layer=6,  # change if you used a different layer
+            layer=6,
         )
-        # emb_list[0] is a numpy array of shape (L, emb_dim)
-        emb_tensor = torch.tensor(emb_list[0], dtype=torch.float32).unsqueeze(0)  # (1, L, emb_dim)
+        emb = torch.tensor(emb_list[0], dtype=torch.float32).unsqueeze(0)  # (1, L, emb_dim)
 
-        # 2) Forward pass, sigmoid, then threshold at 0.5 → discrete prediction
+        # 2) Forward pass + sigmoid
         with torch.no_grad():
-            logits = self.classifier(emb_tensor)  # tensor shape (1, L)
-            probs = torch.sigmoid(logits)  # tensor shape (1, L)
-            preds = (probs > 0.5)[0].cpu().numpy().astype(int)  # ndarray shape (L,)
+            logits = self.classifier(emb)  # (1, L)
+            probs = torch.sigmoid(logits)[0].cpu().numpy()  # (L,)
 
-        return preds
+        # 3) Base threshold
+        mask = probs > 0.5
+
+        # 4) If too few positives, relax threshold
+        if mask.sum() < 3:
+            threshold = probs.mean()
+            mask = probs > threshold
+
+        # 5) Still too few? Force top-3
+        if mask.sum() < 3:
+            topk = probs.argsort()[-3:]  # indices of top 3 scores
+            mask = np.zeros_like(probs, dtype=int)
+            mask[topk] = 1
+        else:
+            mask = mask.astype(int)
+
+        return mask  # shape (L,), values 0 or 1
 
     def _set_output(self, text: str):
         self.output.config(state="normal")
