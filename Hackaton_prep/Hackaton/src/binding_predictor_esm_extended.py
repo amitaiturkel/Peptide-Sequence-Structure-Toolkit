@@ -94,8 +94,7 @@ class BindingPredictor(nn.Module):
             classifier_layers.append(nn.Linear(classifier_hidden_dim, 1))
         else:
             classifier_layers.append(nn.Linear(hidden_dim * 2, 1))
-        if self.pos_weight is not None:
-            classifier_layers.append(nn.Sigmoid())
+
         self.classifier = nn.Sequential(*classifier_layers)
 
     def forward(self, x):
@@ -109,17 +108,17 @@ def calculate_pos_weight(labels):
     n_pos = (all_labels == 1).sum()
     n_neg = (all_labels == 0).sum()
     return n_neg / (n_pos + 1e-6)  # add epsilon to avoid division by zero
+
+
 # ---------- Train ----------
-def train_model(model, dataloader, n_epochs=10, lr=1e-3):
+def train_model(model, dataloader, n_epochs=10, lr=1e-3, loss_log_path = None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    if model.pos_weight is not None:
-        pos_weight_tensor = torch.tensor([model.pos_weight], device=device)
-        criterion = nn.BCEWithLogitsLoss(reduction='none', pos_weight=pos_weight_tensor)
-    else:
-        criterion = nn.BCELoss(reduction='none')  # Use sigmoid in model
+    pos_weight_tensor = torch.tensor([model.pos_weight or 1.0], device=device)
+    criterion = nn.BCEWithLogitsLoss(reduction='none', pos_weight=pos_weight_tensor)
 
+    losses = []
     for epoch in range(n_epochs):
         model.train()
         total_loss = 0
@@ -131,7 +130,15 @@ def train_model(model, dataloader, n_epochs=10, lr=1e-3):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            epoch_loss = total_loss
+            losses.append({"epoch": epoch + 1, "loss": epoch_loss})
         print(f"Epoch {epoch+1}: Loss = {total_loss:.4f}")
+    if loss_log_path:
+        os.makedirs(os.path.dirname(loss_log_path), exist_ok=True)
+        with open(loss_log_path, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=["epoch", "loss"])
+            writer.writeheader()
+            writer.writerows(losses)
 
 # ---------- Evaluate ----------
 def evaluate_model(model, dataloader):
@@ -176,7 +183,8 @@ def run_pipeline_from_pickle(data_path="peptide_data.pkl",
                              n_epochs=10,
                              batch_size=10,
                              add_weights = False,
-                             lr=1e-3):
+                             lr=1e-3,
+                             suffix = ''):
 
 
     # Load raw data
@@ -206,20 +214,23 @@ def run_pipeline_from_pickle(data_path="peptide_data.pkl",
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False, collate_fn=pad_collate)
 
     # Train
+    pos_weight = None
+    if add_weights:
+        pos_weight = calculate_pos_weight(train_y)
     model = BindingPredictor(
         emb_dim=embedding_size,
         hidden_dim=hidden_dim,
         classifier_hidden_dim=classifier_hidden_dim,
         use_mlp=use_mlp,
         use_dropout=use_dropout,
-        dropout_rate=dropout_rate
+        dropout_rate=dropout_rate,
+        pos_weight = pos_weight
     )
 
     print("Training model...")
 
-    if add_weights:
-        model.pos_weight = calculate_pos_weight(train_y)
-    train_model(model, train_loader, n_epochs=n_epochs, lr=lr)
+
+    train_model(model, train_loader, n_epochs=n_epochs, lr=lr,loss_log_path =f"results/reports/{suffix}.csv")
 
 
     # Save
@@ -253,6 +264,18 @@ def main(data_path="peptide_data.pkl",
         batch_size =batch_size
 
     )
+
+def format_params_for_filename(params: dict) -> str:
+    parts = []
+    for k, v in params.items():
+        if isinstance(v, bool):
+            v = int(v)  # True → 1, False → 0
+        elif isinstance(v, float):
+            v = f"{v:.3g}".replace('.', 'p')  # 0.001 → 0p001
+        parts.append(f"{k}_{v}")
+    return "_".join(parts)
+
+
 def grid_search(param_grid, csv_path="results.csv"):
     keys = list(param_grid.keys())
     combinations = list(itertools.product(*[param_grid[k] for k in keys]))
@@ -273,11 +296,15 @@ def grid_search(param_grid, csv_path="results.csv"):
             params = dict(zip(keys, combo))
             print(f"\nRunning experiment with: {params}")
 
+            suffix = format_params_for_filename(params)
+            model_path = f"saved_models/model_{suffix}.pt"
+            embedding_path = f"saved_models/emb_{params['embedding_size']}.pkl"
+
             try:
                 metrics = run_pipeline_from_pickle(
                     data_path="data/peptide_data.pkl",
-                    embedding_path=f"saved_models/emb_{params['embedding_size']}.pkl",
-                    model_path=f"saved_models/model_emb{params['embedding_size']}_ep{params['n_epochs']}_bs{params['batch_size']}.pt",
+                    embedding_path=embedding_path,
+                    model_path=model_path,
                     embedding_size=params["embedding_size"],
                     esm_layer=params["esm_layer"],
                     test_size=params["test_size"],
@@ -290,6 +317,7 @@ def grid_search(param_grid, csv_path="results.csv"):
                     use_dropout=params["use_dropout"],
                     dropout_rate=params["dropout_rate"],
                     add_weights = params["add_weights"],
+                    suffix = suffix
                 )
                 result_row = {**params, **metrics}
                 writer.writerow(result_row)
@@ -312,5 +340,4 @@ if __name__ == "__main__":
         "dropout_rate": [0.15,0.3, 0.5],
         "add_weights": [True, False],
     }
-
     grid_search(param_grid, csv_path="results/results_ext.csv")
