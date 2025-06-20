@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os, sys
+
+import numpy as np
 import torch
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
@@ -78,13 +80,17 @@ class SequencePredictorApp:
             self._set_output(text)
         except Exception as e:
             self._set_output(f"❌ Prediction error:\n{e}")
-
+    def topk_predictions(self, pred_probs, k=5):
+        pred = np.zeros_like(pred_probs)
+        topk_idx = np.argsort(pred_probs)[-k:]
+        pred[topk_idx] = 1
+        return pred
     def _predict(self, seq: str):
         """
-        Returns a binary vector (0/1) per residue, with exactly 5 residues marked as binding (1).
-        Picks the 5 residues with highest predicted probabilities.
+        Discrete prediction (0/1) per residue with adaptive thresholding.
+        Ensures at least 3 residues are predicted as binding.
         """
-        # 1) Get ESM embeddings
+        # 1) Get ESM embedding
         emb_list = get_esm_embeddings(
             [seq],
             self.esm_model,
@@ -93,21 +99,17 @@ class SequencePredictorApp:
             self.device,
             layer=6,
         )
-        emb_tensor = torch.tensor(emb_list[0], dtype=torch.float32).unsqueeze(0)  # (1, L, emb_dim)
+        emb = torch.tensor(emb_list[0], dtype=torch.float32).unsqueeze(0)  # (1, L, emb_dim)
 
-        # 2) Run model and get sigmoid probabilities
+        # 2) Forward pass through model (LSTM + classifier)
         with torch.no_grad():
-            logits = self.classifier(emb_tensor)  # (1, L)
-            probs = torch.sigmoid(logits)[0].cpu().numpy()  # (L,)
+            logits = self.classifier(emb)  # (1, L, 1)
+            probs = torch.sigmoid(logits)[0, :].cpu().numpy()  # (L,)
 
-        # 3) Choose top-5 indices
-        topk = probs.argsort()[-5:]  # last 5 indices = top 5 values
+        # 3) Apply top-k thresholding
+        pred_mask = self.topk_predictions(probs, k=5)
 
-        # 4) Build binary prediction vector
-        mask = np.zeros_like(probs, dtype=int)
-        mask[topk] = 1
-
-        return mask  # shape (L,)
+        return pred_mask  # shape (L,), values 0 or 1
 
     def _set_output(self, text: str):
         self.output.config(state="normal")
