@@ -288,10 +288,13 @@ def main(data_path="peptide_data.pkl",
     )
 
 
-def grid_search( csv_path="results.csv"):
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
-    with open(csv_path, "w", newline='') as csvfile:
+
+
+if __name__ == "__main__":
+    os.makedirs(os.path.dirname("results/results.csv"), exist_ok=True)
+
+    with open("results/results.csv", "w", newline='') as csvfile:
         writer = csv.DictWriter(csvfile,
                                 fieldnames= ["precision", "recall", "f1",
                                             "support", "mean_f1_per_peptide"])
@@ -311,14 +314,3 @@ def grid_search( csv_path="results.csv"):
         writer.writerow(result_row)
         print(f"Logged results: {result_row}")
 
-
-if __name__ == "__main__":
-    # param_grid = {
-    #     "embedding_size": [640, 1280],
-    #     "esm_layer": [6, 8, 20],
-    #     "n_epochs": [10, 20, 50],
-    #     "batch_size": [8, 16],
-    #     "test_size": [0.2]
-    # }
-
-    grid_search( csv_path="results/results.csv")
