@@ -31,15 +31,4 @@ Our goal was to reproduce the idea and extend the pipeline to classify peptide r
 
 ---
 
-## 🚀 Usage Guide
 
-See the full usage guide in [`inference.py`](hackathon/inference.py) for how to:
-
-- Load a pretrained model
-- Provide a sequence or a PDB file
-- Run residue-level binding prediction
-- Get an easy-to-read report of the predicted binding sites
-
-You can also run grid search and training pipelines using the scripts in the `hackathon/` folder.
-
----
