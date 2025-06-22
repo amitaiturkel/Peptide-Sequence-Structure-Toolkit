@@ -54,7 +54,7 @@ def extract_peptides_and_masks(pdb_dir, crm1_chain_id="A", peptide_chain_id="B",
             peptide_seqs.append(seq)
             binding_masks.append(mask)
         except Exception as e:
-            print(f"⚠️ Skipping {pdb_file}: {e}")
+            print(f"Skipping {pdb_file}: {e}")
 
     return peptide_seqs, binding_masks
 
@@ -75,4 +75,4 @@ if __name__ == '__main__':
     with open(save_path, "wb") as f:
         pickle.dump((seqs, masks), f)
 
-    print(f"✅ Saved peptide sequences and masks to {save_path}")
+    print(f"Saved peptide sequences and masks to {save_path}")
