@@ -2,43 +2,41 @@
 
 ## Project Overview
 
-This project aims to **predict which amino acids in Nuclear Export Signal (NES) peptides bind to the five specific CRM1 protein pockets**. Accurately identifying these binding residues helps understand NES-CRM1 interactions and can guide drug design or biological research.
+This project focuses on **predicting which residues in Nuclear Export Signal (NES) peptides bind to the CRM1 protein**, using a deep learning approach that relies only on sequence information. Instead of manually defined motifs or structural inputs, we use **pretrained protein language model embeddings (ESM2)** combined with a **BiLSTM classifier** to predict residue-level binding directly from peptide sequences.
 
 ## Why NES?
 
-NES peptides are short sequences that mediate the export of proteins from the nucleus by binding to the CRM1 export receptor. Understanding the precise residues within these NES peptides that physically interact with CRM1's binding pockets is crucial for decoding nuclear export mechanisms.
+NES peptides are short, leucine-rich sequences that guide proteins out of the nucleus by binding to the CRM1 export receptor. Understanding which specific residues in NES peptides bind CRM1’s five hydrophobic pockets is important for elucidating nuclear export mechanisms and developing therapeutics, as CRM1 is a validated target in cancer treatment.
 
 ## Dataset and Labeling
 
-To train a machine learning model for this task, we need a **labeled dataset** indicating which amino acids bind CRM1 pockets.
+The training data consists of **CRM1–NES peptide complex structures** predicted by **AlphaFold**. Each complex contains a CRM1 protein (typically chain A) and a NES peptide (chain B).
 
-* We start with the **NESDB dataset**, which contains experimentally validated NES peptide sequences.
-* For each NES peptide, we collect its **3D structural information** from Protein Data Bank (PDB) files or AlphaFold predicted structures.
-* The CRM1 protein's 3D structure is also available, highlighting its five binding pockets.
+To generate residue-level labels:
 
-## How 3D Structural Data Helps Labeling
+   *We compute the **minimum heavy-atom distances** between each peptide residue and the CRM1 structure.
 
-The 3D structures provide the **atomic coordinates** (x, y, z) of every residue in both the NES peptide and the CRM1 protein.
+   *We then **label the top 5 closest residues** in each peptide as binding residues (label = 1), based on CRM1’s five known binding pockets.
 
-**Label generation pipeline:**
+   *All other residues are labelled as non-binding (label = 0).
 
-1. Extract coordinates of alpha carbon (CA) atoms of each amino acid in the NES peptide and in each CRM1 pocket.
-2. Calculate the **Euclidean distance** between every NES residue and the CRM1 pocket atoms.
-3. Assign a **binding label (1)** to a residue if it lies within a threshold distance (e.g., 4 Å) from any CRM1 pocket atom; otherwise, label it as **non-binding (0)**.
-
-This process creates binary binding labels for each residue, essential for supervised training.
+This **top-5 labeling strategy** ensures consistency with CRM1’s binding capacity and simplifies training.
 
 ## Pipeline Summary
 
-1. **Parse NESDB data** to get NES peptide sequences.
-2. **Load PDB or AlphaFold structures** of peptide-CRM1 complexes.
-3. **Extract 3D coordinates** of peptides and CRM1 pockets.
-4. **Compute binding labels** based on distance thresholds.
-5. **Generate ESM-2 embeddings** for each peptide residue sequence.
-6. **Combine embeddings and labels** into a dataset CSV file.
-7. **Train a residue-level binary classifier (BiLSTM)** to predict binding residues.
-8. **Evaluate the model** on validation and test sets.
+1. **Parse AlphaFold CRM1–peptide structures** (mmCIF or PDB format) using Biopython.
 
+2. **Extract sequences** and filter for standard amino acids.
+
+3. **Label binding residues** by computing the top-5 closest peptide residues to CRM1 atoms.
+
+4. **Generate residue-level embeddings** using the ESM2 pretrained protein language model.
+
+5. **Train a BiLSTM model** on these embeddings to predict binding probabilities per residue.
+
+6. **Classify binding residues** at inference by selecting the top 5 scoring positions per peptide.
+
+7. **Evaluate the model** using residue-level metrics like precision, recall, and F1 score.
 ---
 
 ## Installation
@@ -138,8 +136,6 @@ These grid searches systematically test parameter combinations for best performa
 - **Output**: Per-residue binary classification (binding vs non-binding)
 
 ### Training Strategy
-- **Positive samples**: Residues within distance threshold of CRM1 pockets
-- **Distance-based labeling**: Euclidean distance ≤ 4Å from CRM1 atoms
 - **Top-k selection**: Focus on 5 most likely binding residues per peptide
 - **Loss function**: Binary cross-entropy with optional class weighting
 
@@ -160,22 +156,32 @@ These grid searches systematically test parameter combinations for best performa
 
 ### Input Sequence:
 ```
-MALKLAGLDI
+PRTHYGQKAILFLPLPVSSD
 ```
 
 ### Prediction Output:
 ```
-Per-residue contact probability:
-Pos 1 (M): 0.125
-Pos 2 (A): 0.892  ← Top-5 binding site
-Pos 3 (L): 0.756  ← Top-5 binding site  
-Pos 4 (K): 0.234
-Pos 5 (L): 0.681  ← Top-5 binding site
-Pos 6 (A): 0.445
-Pos 7 (G): 0.123
-Pos 8 (L): 0.567
-Pos 9 (D): 0.798  ← Top-5 binding site
-Pos 10 (I): 0.612 ← Top-5 binding site
+Per-residue contact predication:
+Pos 1 (P): 0.000
+Pos 2 (R): 0.000
+Pos 3 (T): 0.000
+Pos 4 (H): 0.000
+Pos 5 (Y): 0.000
+Pos 6 (G): 0.000
+Pos 7 (Q): 0.000
+Pos 8 (K): 0.000
+Pos 9 (A): 0.000
+Pos 10 (I): 1.000 ← Top-5 binding site
+Pos 11 (L): 1.000 ← Top-5 binding site
+Pos 12 (F): 1.000 ← Top-5 binding site
+Pos 13 (L): 1.000 ← Top-5 binding site
+Pos 14 (P): 1.000 ← Top-5 binding site
+Pos 15 (L): 0.000
+Pos 16 (P): 0.000
+Pos 17 (V): 0.000
+Pos 18 (S): 0.000
+Pos 19 (S): 0.000
+Pos 20 (D): 0.000
 ```
 
 ## Model Variants
@@ -196,7 +202,6 @@ The project includes two model configurations:
 - CUDA-compatible GPU (recommended for ESM-2 inference)
 - At least 8GB RAM for model loading
 - PDB/mmCIF structure files for training data
-Here's a cleaned-up and corrected version of your troubleshooting and environment setup guide, with consistent formatting and accurate commands for both Windows and Linux users:
 
 ---
 
@@ -279,23 +284,5 @@ python -m ipykernel install --user --name=.venv --display-name "Python (.venv)"
 
 ### Configuration Notes
 - Update `crm1_chain_id` and `peptide_chain_id` in `data_processing.py` if your PDB files use different chain identifiers
-- Adjust distance thresholds and top-k values based on your specific research needs
+- Adjust top-k value based on your specific research needs
 - Model paths in the GUI notebook may need updating based on your file structure
-
-## Biological Significance
-
-This tool addresses a key challenge in structural biology: predicting protein-protein interactions from sequence alone. By combining:
-- **Evolutionary information** (ESM-2 embeddings)
-- **Structural constraints** (distance-based labeling)
-- **Sequence context** (BiLSTM modeling)
-
-The model can identify functionally important residues that mediate nuclear export, potentially informing:
-- Drug target identification
-- Protein engineering efforts
-- Understanding of nuclear transport mechanisms
-
-
-
-
-
-**Note**: This tool is designed for research purposes. Experimental validation is recommended for critical applications involving NES-CRM1 interactions.
