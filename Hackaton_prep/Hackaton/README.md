@@ -91,6 +91,44 @@ jupyter notebook NES_CRM1_Predictor_GUI.ipynb
 3. View per-residue binding predictions
 4. The top-5 most likely binding residues are identified
 
+
+### 3. Grid Search Experiments
+
+To optimize model hyperparameters, three different grid search scripts are provided:
+
+#### 📄 `grid_search_binding_predictor_esm_extended.py`
+
+* **Purpose:** Extended search using multiple architectural options
+* **Features Tuned:** MLP usage, dropout, weighted loss, classifier depth
+* **Run with:**
+
+  ```bash
+  python src/grid_search_scripts/grid_search_binding_predictor_esm_extended.py
+  ```
+* **Results saved to:** `results/results_ext.csv`
+
+#### 📄 `grid_search_binding_predictor_esm_with_weight.py`
+
+* **Purpose:** Simpler grid search with class weighting enabled
+* **Run with:**
+
+  ```bash
+  python src/grid_search_scripts/grid_search_binding_predictor_esm_with_weight.py
+  ```
+* **Results saved to:** `results/results.csv`
+
+#### 📄 `grid_search_binding_predictor_esm_without_weight.py`
+
+* **Purpose:** Grid search without using class weights
+* **Run with:**
+
+  ```bash
+  python src/grid_search_scripts/grid_search_binding_predictor_esm_without_weight.py
+  ```
+* **Results saved to:** `results/results.csv`
+
+These grid searches systematically test parameter combinations for best performance on peptide binding prediction.
+
 ## Model Architecture
 
 ### ESM-2 + BiLSTM Approach
